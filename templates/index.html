@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Audio Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #F0F0F0;
+            margin: 0;
+        }
+
+        .container {
+            background-color: #fff;
+            width: 100%;
+            max-width: 1000px;
+            padding: 30px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+            position: relative;
+        }
+
+        .chat-box {
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .chat-bubble {
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 15px;
+            display: inline-block;
+            max-width: 80%;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .user-bubble {
+            background-color: #007BFF;
+            color: white;
+            align-self: flex-end;
+            text-align: right;
+            border-top-right-radius: 0;
+        }
+
+        .response-bubble {
+            background-color: #F0F0F0;
+            color: black;
+            align-self: flex-start;
+            text-align: left;
+            border-top-left-radius: 0;
+        }
+
+        .audio-player-container {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-radius: 15px;
+            background-color: #E9ECEF;
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        .audio-player {
+            flex-grow: 1;
+            margin-left: 10px;
+        }
+
+        .audio-duration {
+            font-size: 12px;
+            color: #6C757D;
+            margin-left: 10px;
+        }
+
+        .recording-indicator {
+            position: absolute;
+            right: 15px;
+            bottom: 15px;
+            background-color: #FF0000;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #0056B3;
+        }
+
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #F8D7DA;
+            color: #721C24;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-size: 18px;
+            display: none;
+            /* Hidden by default */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>PTECH FUSION SCHEDULING BOT</h1>
+        <div class="chat-box" id="chatBox">
+            <!-- Chat bubbles will be appended here -->
+            <div id="errorMessage" class="error-message">
+                Unable to connect to server
+            </div>
+        </div>
+        <button id="recordButton">Start Recording</button>
+    </div>
+    <script>
+        let recordButton = document.getElementById('recordButton');
+        let chatBox = document.getElementById('chatBox');
+        let errorMessage = document.getElementById('errorMessage');
+        let mediaRecorder;
+        let audioChunks = [];
+        let ws;
+        let recordingMessage; // Store the recording message element
+
+        // Initialize WebSocket connection
+        function connectWebSocket() {
+            ws = new WebSocket('ws://192.168.1.21:8000/ws/assistant'); // replace with your WebSocket URL
+            ws.onopen = function () {
+                console.log('Connected to WebSocket');
+                errorMessage.style.display = 'none';
+            };
+            ws.onmessage = async function (event) {
+                if (typeof event.data === 'string') {
+                    // It's a text message
+                    displayResponseMessage(event.data);
+                } else {
+                    // It's an audio message
+                    const arrayBuffer = await event.data.arrayBuffer();
+                    const audioBlob = new Blob([arrayBuffer], { type: 'audio/wav' });
+                    createAudioPlayer(audioBlob, false);
+                }
+            };
+            ws.onerror = function (error) {
+                console.error('WebSocket Error: ', error);
+                displayErrorMessage(); // Show error message
+            };
+            ws.onclose = function () {
+                console.log('WebSocket connection closed');
+                displayErrorMessage(); // Show error message if connection is closed
+            };
+        }
+
+        // Display response message on the left
+        function displayResponseMessage(text) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('chat-bubble', 'response-bubble');
+            bubble.textContent = text;
+            chatBox.appendChild(bubble);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Create an audio player for the audio message
+        function createAudioPlayer(audioBlob, isUserAudio) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('chat-bubble', isUserAudio ? 'user-bubble' : 'response-bubble');
+            const audioPlayerContainer = document.createElement('div');
+            audioPlayerContainer.classList.add('audio-player-container');
+            const audioPlayer = document.createElement('audio');
+            audioPlayer.classList.add('audio-player');
+            audioPlayer.controls = true; // Add controls for play, pause, etc.
+            audioPlayer.src = URL.createObjectURL(audioBlob);
+
+            // Wait for audio metadata to be loaded before calculating duration
+            audioPlayer.onloadedmetadata = function () {
+                const duration = Math.floor(audioPlayer.duration);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                const formattedDuration = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                const durationElement = document.createElement('div');
+                durationElement.classList.add('audio-duration');
+                // durationElement.textContent = formattedDuration;
+                audioPlayerContainer.appendChild(durationElement);
+            };
+
+            audioPlayerContainer.appendChild(audioPlayer);
+            bubble.appendChild(audioPlayerContainer);
+            chatBox.appendChild(bubble);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Function to start recording
+        recordButton.addEventListener('click', async () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                // Stop recording
+                mediaRecorder.stop();
+                recordButton.textContent = 'Start Recording';
+            } else {
+                // Start recording
+                audioChunks = [];
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = function (event) {
+                    audioChunks.push(event.data);
+                };
+                mediaRecorder.onstop = function () {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    sendAudioToWebSocket(audioBlob);
+                    createAudioPlayer(audioBlob, true); // Pass true for user audio
+
+                    // Remove the "Recording..." message
+                    if (recordingMessage) {
+                        chatBox.removeChild(recordingMessage);
+                        recordingMessage = null;
+                    }
+                };
+
+                mediaRecorder.start();
+                recordButton.textContent = 'Stop Recording';
+
+                // Show a temporary "Recording..." message while recording
+                recordingMessage = document.createElement('div');
+                recordingMessage.classList.add('chat-bubble', 'user-bubble');
+                recordingMessage.textContent = 'Recording...';
+                chatBox.appendChild(recordingMessage);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        });
+
+        // Function to send audio to WebSocket server
+        function sendAudioToWebSocket(audioBlob) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(audioBlob);
+                console.log('Audio sent to WebSocket');
+            } else {
+                console.error('WebSocket is not connected');
+            }
+        }
+
+        // Function to display error message
+        function displayErrorMessage() {
+            errorMessage.style.display = 'block';
+        }
+
+        // Connect to the WebSocket when the page loads
+        connectWebSocket();
+    </script>
+</body>
+
+
+
+</html>

@@ -1,0 +1,34 @@
+[
+    {
+        "name": "Dr. Ali",
+        "specialty": "Cardiologist",
+        "available_slots": [
+            "2024-09-25 09:00",
+            "2024-09-25 10:00"
+        ]
+    },
+    {
+        "name": "Dr. Bilal",
+        "specialty": "Dentist",
+        "available_slots": [
+            "2024-09-26 11:00",
+            "2024-09-26 12:00"
+        ]
+    },
+    {
+        "name": "Dr. Mehar",
+        "specialty": "Dermatologist",
+        "available_slots": [
+            "2024-09-27 14:00",
+            "2024-09-27 15:00"
+        ]
+    },
+    {
+        "name": "Dr. Rana",
+        "specialty": "Neurologist",
+        "available_slots": [
+            "2024-09-27 14:00",
+            "2024-09-27 15:00"
+        ]
+    }
+]
