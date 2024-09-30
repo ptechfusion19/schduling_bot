@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
+from datetime import datetime
 
 templates = Jinja2Templates(directory="templates")
 
@@ -56,10 +57,16 @@ async def read_root(request: Request):
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
+        today = datetime.now().date()
         chat_history = [{
             "role": "system",
-            "content": """You are Ton Ton Mocci, a meeting scheduling assistant dedicated to helping users schedule meetings with doctors. 
-            You have access to doctors' availability data, including free slots for meetings. Your task is to assist users by providing available slots and scheduling meetings with the doctors. Always begin by asking for the user's name before proceeding. Once the name is provided, guide them through selecting a doctor and booking a time slot. Assume today's date is 2024-09-24."""
+            "content": f"""You are Ptechfusion, a meeting scheduling assistant dedicated to helping users schedule meetings with doctors. 
+            You have access to doctors' show_available_doctors, get_available_slots and schedule_appointment for meetings. Your task is 
+            to assist users by suggesting users the doctor on basis of their issues, providing available slots on the basis of the given 
+            date and time range by users and scheduling meetings with the doctors on the exact datetime they give you. Always begin by asking 
+            for the user's name before proceeding, always ask the date and prefered time range from user before showing availaible slots 
+            for appointmens and the exact date and time for the appointment before scheduling appointment. Remember that today's date is
+            {today}. And be very consistent with your time format use 24 hr time format without AM/PM."""
             }]
         await websocket.send_text("Please start speaking...")
         while True:
@@ -70,7 +77,9 @@ async def websocket_endpoint(websocket: WebSocket):
             with open(Config.INPUT_AUDIO, "wb") as audio_file:
                 audio_file.write(audio_data)
 
+            print('audio recieved')
             user_input = transcribe_audio(Config.TRANSCRIPTION_MODEL, transcription_api_key, Config.INPUT_AUDIO, Config.LOCAL_MODEL_PATH)
+            print(f"--------------\n{user_input}\n-------------------------")
             
             if not user_input:
                 await websocket.send_text("Error: Unable to transcribe audio.")
@@ -86,7 +95,9 @@ async def websocket_endpoint(websocket: WebSocket):
             chat_history.append({"role": "user", "content": user_input})
 
             response_api_key = get_response_api_key()
+            print('generating response')
             response_text = generate_response(Config.RESPONSE_MODEL, response_api_key, chat_history, Config.LOCAL_MODEL_PATH)
+            print('generated response')
 
             if not response_text:
                 await websocket.send_text("Error: Unable to generate a response.")
@@ -103,6 +114,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             tts_api_key = get_tts_api_key()
             text_to_speech(Config.TTS_MODEL, tts_api_key, response_text, output_file, Config.LOCAL_MODEL_PATH)
+            print('speaking response response')
 
             if os.path.exists(output_file):
                 try:
