@@ -17,7 +17,7 @@ def generate_response(model, api_key, chat_history, local_model_path=None):
             return response.choices[0].message.content
         elif model == 'groq':
             client = Groq(api_key=api_key)
-
+            
             return run_conversation(chat_history, client)
 
         elif model == 'ollama':
